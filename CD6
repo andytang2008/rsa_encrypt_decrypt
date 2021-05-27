@@ -1,0 +1,200 @@
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.Signature;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import javax.crypto.Cipher;
+import java.security.KeyFactory;
+
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.Writer;
+import java.io.FileWriter;
+import java.io.OutputStreamWriter;
+import java.io.OutputStream;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.Path;
+
+
+import java.security.cert.CertificateFactory;
+import java.security.cert.Certificate;
+import java.io.ByteArrayInputStream;
+import java.nio.channels.FileChannel;
+import java.io.ByteArrayOutputStream;
+import java.nio.channels.Channels;
+import java.nio.charset.Charset;
+import javax.xml.bind.DatatypeConverter;
+import java.io.UnsupportedEncodingException;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
+import java.security.NoSuchAlgorithmException;
+import javax.crypto.NoSuchPaddingException;
+import java.security.InvalidKeyException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.BadPaddingException;
+//Andy, try some characteristics of Base64. Read Base64 coding private and public key file and transfer them into PKCS#8 and x.509 file.
+
+public class CD6 {
+   public static void main(String args[]) throws Exception{
+	   //Creating a Signature object
+      Signature sign = Signature.getInstance("SHA256withRSA");
+      
+      //Creating KeyPair generator object
+      KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA");
+      
+      //Initializing the key pair generator
+      keyPairGen.initialize(2048);
+      
+      //Generate the pair of keys
+      KeyPair pair = keyPairGen.generateKeyPair();   
+	  
+	  String outFile = "myTang";
+
+      //Getting the public key from the key pair
+      PublicKey publicKey = pair.getPublic();  
+	  PrivateKey privateKey = pair.getPrivate();   
+	  
+	  
+			//prepare to write private and public key as Binary files by Andy
+			   OutputStream  out = new FileOutputStream(outFile + ".pub");
+					out.write(publicKey.getEncoded());
+					out.close();
+
+				OutputStream out2 = new FileOutputStream(outFile + ".key");
+				out2.write(privateKey.getEncoded());
+				out2.close();
+				
+			//prepare to write private and public key as BASE64 files by Andy
+				Base64.Encoder encoder = Base64.getEncoder();
+				Writer out3 = new FileWriter(outFile + "_Private_Base64.pem");
+					out3.write("-----BEGIN RSA PRIVATE KEY-----\n");
+					out3.write(encoder.encodeToString(privateKey.getEncoded()));
+				   out3.write("\n-----END RSA PRIVATE KEY-----\n");
+					out3.close();
+				Writer out4 = new FileWriter(outFile + "_Public_Base64.pem");
+					out4.write("-----BEGIN RSA PUBLIC KEY-----\n");
+					out4.write(encoder.encodeToString(publicKey.getEncoded()));
+					out4.write("\n-----END RSA PUBLIC KEY-----\n");
+					out4.close();
+				
+				
+			
+			System.out.println("Public key:  "+publicKey);
+			System.out.println("Prviate key:  "+privateKey);
+			System.out.println("");
+			System.out.println("-------------------Before cipher and decipher----------------");
+			System.out.println("");
+					
+		cipher_decipher("myTang.key", "myTang.pub");			
+					
+			
+				
+//as below, we will read bytes from base64 DEM files and transfer them into key files which have different names slightly.		
+			String privateKeyContent = new String(Files.readAllBytes(Paths.get(ClassLoader.getSystemResource("myTang_Private_Base64.pem").toURI())));
+			String publicKeyContent = new String(Files.readAllBytes(Paths.get(ClassLoader.getSystemResource("myTang_Public_Base64.pem").toURI())));
+
+			privateKeyContent = privateKeyContent.replaceAll("\\n", "").replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----", "");
+			publicKeyContent = publicKeyContent.replaceAll("\\n", "").replace("-----BEGIN RSA PUBLIC KEY-----", "").replace("-----END RSA PUBLIC KEY-----", "");;
+
+			KeyFactory kf3 = KeyFactory.getInstance("RSA");
+
+			PKCS8EncodedKeySpec keySpecPKCS8 = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKeyContent));
+			PrivateKey privKey = kf3.generatePrivate(keySpecPKCS8);
+
+			X509EncodedKeySpec keySpecX509 = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyContent));
+			RSAPublicKey pubKey = (RSAPublicKey) kf3.generatePublic(keySpecX509);
+			System.out.println();
+System.out.println("****************************************************************");
+			System.out.println("Public key transferred from Base64 PEM: "+pubKey);
+			System.out.println("Prviate key transferred from Base64 PEM: "+privKey);
+			System.out.println("");
+			System.out.println("-------------------Before cipher and decipher----------------");
+			System.out.println("");
+			
+		        String outFileName="myTang_Exported_from_Base64_PEM";
+				OutputStream  output = new FileOutputStream(outFileName + ".pub");
+				output.write(pubKey.getEncoded());
+				output.close();
+
+				output = new FileOutputStream(outFileName + ".key");
+				output.write(privKey.getEncoded());
+				output.close();	
+				
+				cipher_decipher("myTang_Exported_from_Base64_PEM.key", "myTang_Exported_from_Base64_PEM.pub");
+					System.out.println();
+					System.out.println("****************************************************************");
+
+	
+	
+   }
+   		//As below, use the key receovered from base64 PEM to cipher and decipher as a test.
+		/* Read all bytes from the private key binary file */
+    static void cipher_decipher(String privateKeyFile,String publicKeyFile)throws BadPaddingException,IllegalBlockSizeException, InvalidKeyException,        NoSuchPaddingException, InvalidKeySpecException, NoSuchAlgorithmException, IOException, URISyntaxException{
+					String keyFile = privateKeyFile;
+					Path path = Paths.get(keyFile);
+					byte[] bytes = Files.readAllBytes(path);
+					/* Generate private key. */
+					PKCS8EncodedKeySpec ks = new PKCS8EncodedKeySpec(bytes);
+					KeyFactory kf = KeyFactory.getInstance("RSA");
+					PrivateKey private_Key = kf.generatePrivate(ks);
+									
+				/* Read all the public key bytes  from binary file*/
+					String keyFile2 = publicKeyFile;
+					Path path2 = Paths.get(keyFile2);
+					bytes = Files.readAllBytes(path2);
+					/* Generate public key. */
+					X509EncodedKeySpec ks2 = new X509EncodedKeySpec(bytes);
+					KeyFactory kf2 = KeyFactory.getInstance("RSA");
+					PublicKey public_Key = kf2.generatePublic(ks2);
+					
+		  //Creating a Cipher object
+		  Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+		  //Initializing a Cipher object
+		 // cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+		 cipher.init(Cipher.ENCRYPT_MODE, public_Key);  //Andy
+		  
+		  //Add data to the cipher
+		  byte[] input = "Welcome to Las Vegas".getBytes();	  
+		  cipher.update(input);
+		  
+		  //encrypting the data
+		  byte[] cipherText = cipher.doFinal();	 
+		   System.out.print("Ciphered text:  ");
+		  System.out.println( new String(cipherText, "UTF8"));
+
+      //Initializing the same cipher for decryption
+	  
+		  // PrivateKey privKey = pair.getPrivate();   
+		//  cipher.init(Cipher.DECRYPT_MODE, privKey);
+		 cipher.init(Cipher.DECRYPT_MODE, private_Key);
+				System.out.println();
+				System.out.println("Keys generated");
+				System.out.println("public key readed from File:   "+public_Key);
+				System.out.println("private key readed from File:   "+private_Key);
+				System.out.println();		
+			//	OutputStream out2 = new FileOutputStream(outFile + ".pub");
+			//		out2.write(privKey.getEncoded());
+			//		out2.close();
+						  
+
+		  //Decrypting the text
+		  byte[] decipheredText = cipher.doFinal(cipherText);
+		  System.out.print("Deciphered Text:  ");
+		  System.out.println(new String(decipheredText));
+		  
+				  System.err.println("Private key format: " + private_Key.getFormat());
+					// prints "Private key format: PKCS#8" on my machine
+				 System.err.println("Public key format: " + public_Key.getFormat());
+		}  
+		
+
+}
